@@ -50,6 +50,44 @@ def wrap(draw, text: str, fnt, max_width: int):
     if line: lines.append(line)
     return lines
 
+ALLOWED_STATES = {
+    "queued": {"validating", "cancelled", "failed"},
+    "validating": {"scripting", "generating_assets", "failed", "cancelled"},
+    "scripting": {"awaiting_approval", "failed", "cancelled"},
+    "awaiting_approval": {"generating_assets", "cancelled", "failed"},
+    "generating_assets": {"rendering", "failed", "cancelled"},
+    "rendering": {"quality_check", "failed", "cancelled"},
+    "quality_check": {"completed", "failed"},
+    "completed": set(), "failed": set(), "cancelled": set()
+}
+
+def validate_manifest(manifest: dict) -> None:
+    if manifest.get("version") != 1: raise ValueError("Unsupported manifest version")
+    if manifest.get("mode") not in ("topic", "video"): raise ValueError("mode must be topic or video")
+    output=manifest.get("output", {})
+    if output and (output.get("width",1080)!=1080 or output.get("height",1920)!=1920):
+        raise ValueError("MVP output must be 1080x1920")
+    if manifest["mode"]=="topic":
+        if not 4 <= len(str(manifest.get("topic","")).strip()) <= 500: raise ValueError("Topic must contain 4-500 characters")
+        if not 5 <= int(manifest.get("duration_seconds",15)) <= 60: raise ValueError("Topic duration must be 5-60 seconds")
+        if len(str(manifest.get("script",""))) > 5000: raise ValueError("Script must be 5000 characters or fewer")
+    else:
+        url=str(manifest.get("media_url",""))
+        if not manifest.get("media_path") and not url.startswith("https://"): raise ValueError("Video mode requires an HTTPS media_url")
+
+def transition_job(current: str, next_state: str) -> str:
+    if next_state not in ALLOWED_STATES.get(current, set()): raise ValueError(f"Invalid job transition: {current} -> {next_state}")
+    return next_state
+
+def validate_timeline(shots: list[dict], duration: float) -> bool:
+    if not shots or abs(float(shots[0]["start"])) > 0.01: return False
+    cursor=0.0
+    for shot in shots:
+        start=float(shot["start"]); end=float(shot["end"])
+        if abs(start-cursor)>0.02 or end<=start: return False
+        cursor=end
+    return abs(cursor-duration)<=0.05
+
 def make_topic_frames(manifest: dict, outdir: Path) -> tuple[float,list[dict]]:
     duration=max(5,min(int(manifest.get("duration_seconds",15)),60)); total=duration*FPS
     topic=str(manifest["topic"]); script=str(manifest.get("script") or topic)
@@ -115,7 +153,7 @@ def render(manifest: dict, outdir: Path) -> dict:
     if mode=="topic":
         if len(str(manifest.get("topic","")).strip())<4: raise ValueError("Topic must contain at least 4 characters")
         duration,captions=make_topic_frames(manifest,work)
-        run(["ffmpeg","-y","-framerate",str(FPS),"-i",str(work/"frame_%05d.png"),"-c:v","libx264","-preset","veryfast","-crf","24","-pix_fmt","yuv420p","-movflags","+faststart",str(output)])
+        run(["ffmpeg","-y","-framerate",str(FPS),"-i",str(work/"frame_%05d.png"),"-vf","scale=1080:1920:flags=lanczos","-c:v","libx264","-preset","veryfast","-crf","24","-pix_fmt","yuv420p","-movflags","+faststart",str(output)])
         source_info={"mode":"topic","duration":duration,"has_audio":False}
         shots=[{"index":i,"start":c["start"],"end":c["end"],"duration":round(c["end"]-c["start"],3)} for i,c in enumerate(captions)]
     elif mode=="video":
@@ -129,7 +167,7 @@ def render(manifest: dict, outdir: Path) -> dict:
         captions=[]
         if source_info["has_audio"] and not manifest.get("preserve_audio",True): source_info["has_audio"]=False
     else: raise ValueError("mode must be topic or video")
-    report=quality(output,duration)
+    if mode=="video" and not validate_timeline(shots,duration): raise ValueError("Detected shot timeline is not contiguous")\n    report=quality(output,duration)
     (outdir/"manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     (outdir/"shots.json").write_text(json.dumps(shots,indent=2),encoding="utf-8")
     (outdir/"captions.json").write_text(json.dumps({"timing":"phrase-level","items":captions},indent=2),encoding="utf-8")
