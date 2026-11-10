@@ -1,0 +1,64 @@
+name: Cloud Render
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: "JSON job manifest (see docs/ANDROID-QUICKSTART.md)"
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: render-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install worker dependencies
+        run: pip install -r worker/requirements.txt
+      - name: Validate and write manifest
+        env:
+          JOB_MANIFEST: ${{ inputs.manifest }}
+        run: |
+          python - <<'PY'
+          import json, os
+          data=json.loads(os.environ["JOB_MANIFEST"])
+          assert data.get("version")==1, "manifest version must be 1"
+          assert data.get("mode") in ("topic","video"), "mode must be topic or video"
+          if data["mode"]=="topic":
+              assert len(data.get("topic","").strip())>=4
+              assert 5 <= int(data.get("duration_seconds",15)) <= 60
+          else:
+              from urllib.parse import urlparse
+              u=urlparse(data.get("media_url",""))
+              assert u.scheme=="https" and u.netloc, "video mode requires a direct HTTPS URL"
+          with open("/tmp/job.json","w") as f: json.dump(data,f)
+          PY
+      - name: Render MP4
+        run: python worker/worker.py --manifest /tmp/job.json --out artifacts
+      - name: Upload render artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2d-trend-render-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## 2D Trend cloud render" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/quality-report.json ]; then
+            echo "Render and quality report created. Download the workflow artifact above." >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/quality-report.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Render did not complete. Inspect the Render MP4 step logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
