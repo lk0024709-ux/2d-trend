@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r worker/requirements.txt
+      - run: python -m unittest worker.test_worker -v
+      - name: Render topic demo
+        run: |
+          printf '%s' '{"version":1,"mode":"topic","topic":"CI demo story","duration_seconds":5,"script":"A small idea.\nA moving story.","output":{"width":1080,"height":1920}}' > /tmp/demo.json
+          python worker/worker.py --manifest /tmp/demo.json --out /tmp/demo-artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-demo-render
+          path: /tmp/demo-artifacts/
+          retention-days: 3

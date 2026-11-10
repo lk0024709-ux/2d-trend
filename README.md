@@ -1,28 +1,19 @@
 # 2D Trend Studio
 
-A mobile-first, cloud-rendered studio for two workflows:
+Mobile-first, cloud-rendered 2D reel and video stylization MVP. The UI is a lightweight web app; FFmpeg media work runs in GitHub Actions.
 
-- **Video → 2D animation** — stylize source-video shots into an original illustrated/comic look while preserving timing, cuts, and original audio by default.
-- **Topic → animated reel** — create a short script, approve it, generate scenes and voice-over, add timed captions, run visual checks, and render a vertical MP4.
+## Workflows
+- **Topic → Animated Reel:** review and approve a script, then render an animated 9:16 typography reel with phrase-level captions.
+- **Video → 2D Animation:** validate a direct HTTPS source, probe it with FFprobe, detect shot boundaries, apply a deterministic comic-style filter, and preserve original audio by default.
 
-## Designed for Android-only development
-
-The project is built and maintained with **OpenAI Codex**. The user interface is intended to work in a mobile browser. Heavy rendering runs in GitHub Actions or a separately configured cloud worker; a PC and local GPU are not required.
-
-## Current status
-
-Repository bootstrap only. The next step is for Codex to implement the MVP described in [AGENTS.md](AGENTS.md) and [CODEX_TASK.md](CODEX_TASK.md). Do not treat this repository as a finished renderer yet.
-
-## Planned output
-
-- MP4, 1080×1920 for reels (configurable).
-- Script, scene manifest, caption file, render log, and quality-check report.
-- Demo mode that runs without paid API keys.
-
-## Important architecture note
-
-GitHub Actions is a batch processing environment, not a permanent web server. A production web app needs a secure way to pass media and job manifests to the worker. Do not put private video files or API keys in public GitHub repositories. Use authenticated object storage or another secure transfer mechanism for private uploads.
+## Android usage
+See [Android quick start](docs/ANDROID-QUICKSTART.md). Open the Render workflow from the Actions tab, paste a manifest, run it, then download the artifact ZIP.
 
 ## Development
+`npm install && npm run build`
+`pip install -r worker/requirements.txt && python -m unittest worker.test_worker -v`
 
-See [AGENTS.md](AGENTS.md) for repository-wide rules and [CODEX_TASK.md](CODEX_TASK.md) for the implementation brief.
+## Honest capability boundary
+The no-key MVP is deterministic and does not generate original AI artwork or narration. Image generation and TTS provider interfaces are planned extension points; add a server-side provider only after checking current official API documentation and storing credentials in GitHub Actions secrets. Never paste secrets into manifests.
+
+GitHub Actions is a batch worker, not a permanent server. Private uploads require secure object storage. See [Android quick start](docs/ANDROID-QUICKSTART.md) for limits and details.
