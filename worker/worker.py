@@ -9,6 +9,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -271,9 +272,12 @@ def render(manifest: dict, outdir: Path) -> dict:
             media_url = str(manifest.get("media_url", ""))
             if not media_url:
                 raise ValueError("Video mode needs media_path or media_url")
-            source = outdir / "source-video"
-            download(media_url, source)
-        source_info, shots = render_video(manifest, source, output, work)
+            with tempfile.TemporaryDirectory(prefix="2dtrend-source-") as temp_dir:
+                source = Path(temp_dir) / "source-video"
+                download(media_url, source)
+                source_info, shots = render_video(manifest, source, output, work)
+        if media_path and Path(media_path).is_file():
+            source_info, shots = render_video(manifest, source, output, work)
         duration = source_info["duration"]
         captions = []
     if mode == "video" and not validate_timeline(shots, duration):
