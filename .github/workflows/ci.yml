@@ -33,3 +33,14 @@ jobs:
           name: ci-demo-render
           path: /tmp/demo-artifacts/
           retention-days: 3
+      - name: Render synthetic video-to-animation demo
+        run: |
+          ffmpeg -y -f lavfi -i testsrc2=size=360x640:rate=24 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 5 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /tmp/source.mp4
+          printf '%s' '{"version":1,"mode":"video","media_path":"/tmp/source.mp4","style":"indian-comic","preserve_audio":true}' > /tmp/video.json
+          python worker/worker.py --manifest /tmp/video.json --out /tmp/video-artifacts
+          python -c "import json; q=json.load(open('/tmp/video-artifacts/quality-report.json')); assert q['passed'] and q['audio_present'], q"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-video-demo-render
+          path: /tmp/video-artifacts/
+          retention-days: 3
