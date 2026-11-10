@@ -28,6 +28,9 @@ class WorkerTests(unittest.TestCase):
         draw=ImageDraw.Draw(Image.new("RGB",(100,100)))
         lines=worker.wrap(draw,"one two three",worker.font(16),45)
         self.assertGreater(len(lines),1)
+    def test_private_media_urls_are_blocked(self):
+        for url in ("http://example.com/video.mp4","https://127.0.0.1/video.mp4","https://localhost/video.mp4"):
+            with self.assertRaises(ValueError): worker.validate_public_url(url)
     def test_manifest_version_rejected(self):
         with self.assertRaises(ValueError): worker.validate_manifest({"version":2,"mode":"topic","topic":"demo"})
 
