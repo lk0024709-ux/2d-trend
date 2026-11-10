@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic 2D Trend render worker. FFmpeg and FFprobe must be on PATH."""
 from __future__ import annotations
-import argparse, json, math, os, re, subprocess, sys, urllib.request
+import argparse, ipaddress, json, math, os, re, socket, subprocess, sys, urllib.request\nfrom urllib.parse import urlparse
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
@@ -26,7 +26,7 @@ def download(url: str, target: Path) -> None:
     if not url.startswith("https://"): raise ValueError("Only HTTPS media URLs are allowed")
     req=urllib.request.Request(url,headers={"User-Agent":"2DTrendStudio/0.1"})
     total=0
-    with urllib.request.urlopen(req,timeout=30) as response, target.open("wb") as out:
+    with opener.open(req,timeout=30) as response, target.open("wb") as out:
         if response.headers.get("Content-Length") and int(response.headers["Content-Length"])>MAX_BYTES: raise ValueError("Media exceeds 100 MB")
         while True:
             chunk=response.read(1024*1024)
