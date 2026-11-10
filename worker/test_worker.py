@@ -5,7 +5,7 @@ from worker import worker
 class WorkerTests(unittest.TestCase):
     def test_topic_frames_and_phrase_captions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            manifest={"version":1,"mode":"topic","topic":"Moon facts","duration_seconds":5,"script":"First fact.\\nSecond fact."}
+            manifest={"version":1,"mode":"topic","topic":"Moon facts","duration_seconds":5,"script":"First fact.\nSecond fact."}
             duration,captions=worker.make_topic_frames(manifest,Path(tmp))
             self.assertEqual(duration,5)
             self.assertEqual(len(captions),2)
